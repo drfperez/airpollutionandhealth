@@ -1,0 +1,334 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>🌫️ Análisis Epidemiológico Ambiental</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #0f172a; color: #e2e8f0; }
+    .chart-container { position: relative; height: 280px; min-height: 280px; }
+    @media (min-width: 768px) { .chart-container { height: 380px; } }
+    .alert-dot { animation: ping 2s cubic-bezier(0,0,0.2,1) infinite; }
+    @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+    .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+    .pollutant-card {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .pollutant-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .info-tooltip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: help;
+      border-bottom: 1px dotted #94a3b8;
+    }
+    .info-tooltip .tooltip-text {
+      visibility: hidden;
+      width: 240px;
+      background-color: #1e293b;
+      color: #e2e8f0;
+      text-align: center;
+      border-radius: 8px;
+      padding: 6px 10px;
+      position: absolute;
+      z-index: 10;
+      bottom: 125%;
+      left: 50%;
+      margin-left: -120px;
+      font-size: 0.75rem;
+      font-weight: normal;
+      border: 1px solid #334155;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+    .info-tooltip:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200 antialiased">
+  <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="bg-gradient-to-r from-sky-600 to-emerald-600 rounded-2xl sm:rounded-3xl shadow-xl mt-4 sm:mt-6 p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+        <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-xl rounded-xl sm:rounded-2xl flex items-center justify-center text-3xl sm:text-4xl">🌫️</div>
+        <div>
+          <h1 class="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight" data-i18n="app.title">Environmental Epidemiological Analysis</h1>
+          <p class="text-sky-100 text-sm sm:text-base" data-i18n="app.subtitle">Pollution • Incidence • Correlations • Peaks • Trends • Delayed Impact</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+        <select id="languageSelector" class="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white font-medium px-4 py-2 rounded-xl transition-all text-sm sm:text-base shadow-md border border-white/20 outline-none">
+          <option value="es">Español</option>
+          <option value="en">English</option>
+          <option value="ca">Català</option>
+        </select>
+
+        <button id="howItWorksBtn" class="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white font-medium px-4 py-2 sm:px-5 sm:py-3 rounded-xl transition-all flex items-center gap-2 text-sm sm:text-base shadow-md whitespace-nowrap">
+          <span>❓</span>
+          <span data-i18n="app.howItWorks">How it works</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="howItWorksModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-all duration-300 p-4">
+      <div class="bg-slate-900 border border-slate-600 rounded-2xl sm:rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div class="bg-gradient-to-r from-sky-600/30 to-emerald-600/30 px-4 sm:px-6 py-4 flex justify-between items-center border-b border-slate-700 sticky top-0">
+          <h2 class="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+            📊 <span data-i18n="modal.title">How this tool works</span>
+          </h2>
+          <button id="closeModalBtn" class="text-slate-300 hover:text-white text-2xl sm:text-3xl leading-none transition-all p-1">&times;</button>
+        </div>
+
+        <div class="p-4 sm:p-6 space-y-4 text-slate-200 overflow-y-auto flex-1">
+          <div class="bg-slate-800/50 p-4 rounded-xl border-l-4 border-emerald-500">
+            <p class="font-semibold text-emerald-400" data-i18n="modal.purposeTitle">🎯 Purpose</p>
+            <p class="text-sm sm:text-base" data-i18n="modal.purposeText">
+              Analyze the relationship between air pollution (PM₂.₅, NO₂, O₃, etc.) and epidemiological incidence rates. Explore delayed effects (lag), detect extreme incidence peaks, and visualize seasonal trends.
+            </p>
+          </div>
+
+          <div>
+            <p class="font-semibold text-sky-400 flex items-center gap-2" data-i18n="modal.dataReqTitle">📁 Data requirements</p>
+            <ul class="list-disc pl-5 space-y-1 mt-1 text-sm sm:text-base text-slate-300">
+              <li data-i18n-html="modal.dataReq1"><span class="font-mono text-emerald-400">date</span> (YYYY-MM-DD) and <span class="font-mono text-emerald-400">incidencia_1000</span> are mandatory.</li>
+              <li data-i18n-html="modal.dataReq2">Optional: <span class="font-mono">pm2.5</span>, <span class="font-mono">pm10</span>, <span class="font-mono">no2</span>, <span class="font-mono">nox</span>, <span class="font-mono">no</span>, <span class="font-mono">o3</span>, <span class="font-mono">so2</span>.</li>
+              <li data-i18n="modal.dataReq3">CSV format with header, commas or semicolons supported.</li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="font-semibold text-sky-400" data-i18n="modal.howToUseTitle">🚀 How to use</p>
+            <ol class="list-decimal pl-5 space-y-1 text-sm sm:text-base text-slate-300">
+              <li data-i18n="modal.howToUse1">Select a preloaded city dataset or upload your own CSV using "Browse".</li>
+              <li data-i18n="modal.howToUse2">Adjust time filters to focus on specific periods.</li>
+              <li data-i18n="modal.howToUse3">Explore lagged correlations (0–7 days) for delayed impact.</li>
+              <li data-i18n="modal.howToUse4">WHO Relative Risk: Automatically calculated when a pollutant with a WHO threshold is selected. Includes Attributable Risk.</li>
+              <li data-i18n="modal.howToUse5">Peaks table shows statistically unusual incidence days (mean + 2×SD).</li>
+              <li data-i18n="modal.howToUse6">Monthly bar chart reveals seasonal patterns.</li>
+            </ol>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div class="bg-slate-800/70 p-3 rounded-xl border border-slate-700/50">
+              <p class="font-semibold text-emerald-400" data-i18n="modal.box1Title">📈 Correlation & p-values</p>
+              <p class="text-slate-300 text-xs mt-1" data-i18n-html="modal.box1Text">
+                Pearson's r + significance. p &lt; 0.05 indicates association.<br>
+                <span class="text-amber-400">⚠️ Asterisks (*) indicate statistical significance.</span>
+              </p>
+            </div>
+            <div class="bg-slate-800/70 p-3 rounded-xl border border-slate-700/50">
+              <p class="font-semibold text-amber-400" data-i18n="modal.box2Title">⚠️ Peak detection</p>
+              <p class="text-slate-300 text-xs mt-1" data-i18n="modal.box2Text">Threshold = mean + 2×standard deviation.</p>
+            </div>
+            <div class="bg-slate-800/70 p-3 rounded-xl border border-slate-700/50">
+              <p class="font-semibold text-sky-400" data-i18n="modal.box3Title">🩺 Epidemiological Risk</p>
+              <p class="text-slate-300 text-xs mt-1" data-i18n="modal.box3Text">Computes Relative Risk (RR) and Attributable Fraction (AR%) with 95% CI and p-values.</p>
+            </div>
+          </div>
+
+          <div class="bg-slate-800/40 rounded-xl border border-slate-700 p-4 text-sm space-y-2">
+            <p class="font-semibold text-sky-400 flex items-center gap-2" data-i18n="modal.sourcesTitle">📡 Data sources & acknowledgments</p>
+            <p class="text-slate-300 text-xs leading-relaxed" data-i18n-html="modal.sourcesText">
+              Respiratory infection data obtained from <span class="text-emerald-400 font-medium">SIVIC server</span> (Generalitat de Catalunya).<br>
+              Air pollution data obtained from <span class="text-emerald-400 font-medium">XPVCA server</span> (Generalitat de Catalunya).<br>
+              Meteorological data obtained from <span class="text-emerald-400 font-medium">Meteocat</span> (Generalitat de Catalunya).
+            </p>
+            <div class="border-t border-slate-700/60 my-2"></div>
+            <p class="text-slate-300 text-xs" data-i18n-html="modal.author">
+              <span class="font-semibold text-white">👨‍⚕️ Author:</span> Dr. Francisco Pérez Garcia — Head of Technology at Pompeu Fabra High School and Professor of Pharmacology at University of Barcelona.
+            </p>
+          </div>
+        </div>
+
+        <div class="bg-slate-800 px-4 sm:px-6 py-3 sm:py-4 flex justify-end border-t border-slate-700">
+          <button id="closeModalFooterBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-xl transition-all text-sm sm:text-base">
+            <span data-i18n="modal.gotIt">Got it</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="py-6 sm:py-8">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8">
+        <div class="flex flex-col gap-6">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-semibold mb-4" data-i18n="source.title">📍 Select data source</h2>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <select id="citySelector" class="bg-slate-800 text-base sm:text-lg rounded-2xl px-4 py-3 sm:py-4 border border-slate-600 text-white w-full sm:max-w-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all">
+                <option value="" selected disabled data-i18n="source.selectPlaceholder">— Select a city or upload file —</option>
+                <option value="fabra.csv">🏢 Observatori Fabra</option>
+                <option value="poblenou.csv">🏙️ Poblenou</option>
+                <option value="parcvallhebron.csv">🏙️ Parc Vall d'Hebron</option>
+                <option value="palau-reial.csv">🏙️ Palau Reial</option>
+                <option value="gracia.csv">🏙️ Gràcia</option>
+                <option value="ciutadella.csv">🏙️ Ciutadella</option>
+                <option value="sants.csv">🏙️ Sants</option>
+                <option value="eixample.csv">🏙️ Eixample</option>
+                <option value="custom" data-i18n="source.customFile">📁 Upload custom file...</option>
+              </select>
+
+              <span class="text-slate-500 font-medium text-center sm:text-left" data-i18n="source.or">or</span>
+
+              <div class="w-full sm:w-auto">
+                <label for="csvInput" class="cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/50 transition-all px-6 sm:px-8 py-3 sm:py-4 rounded-2xl text-emerald-400 font-semibold flex items-center justify-center gap-2 text-base sm:text-lg w-full sm:w-auto">
+                  📂 <span data-i18n="source.browse">Browse</span>
+                </label>
+                <input type="file" id="csvInput" accept=".csv" class="hidden">
+              </div>
+            </div>
+
+            <div class="mt-5 text-xs sm:text-sm bg-slate-800 rounded-2xl p-3 sm:p-4 inline-block w-full sm:w-auto">
+              <strong data-i18n="source.requiredColumns">Required columns:</strong>
+              <span class="font-mono text-emerald-400">date</span>,
+              <span class="font-mono text-emerald-400">incidencia_1000</span><br>
+              <strong data-i18n="source.optionalColumns">Optional:</strong>
+              pm2.5, pm10, no2, nox, no, co, h2s, o3, so2, c6h6
+            </div>
+          </div>
+
+          <div id="fileStatus" class="hidden mt-2 text-emerald-400 font-medium bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-sm"></div>
+          <div id="errorStatus" class="hidden mt-2 text-red-400 font-medium bg-red-500/10 p-3 rounded-xl border border-red-500/20 text-sm"></div>
+          <div id="columnsDetected" class="hidden mt-2 text-xs bg-slate-800 rounded-2xl p-3 border border-slate-700 break-words"></div>
+        </div>
+      </div>
+
+      <div id="dashboard" class="hidden space-y-6 sm:space-y-8">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+          <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 sm:p-6">
+            <p class="text-xs uppercase text-slate-400" data-i18n="stats.daysAnalyzed">Days analyzed</p>
+            <p id="totalDays" class="text-3xl sm:text-5xl font-semibold text-white mt-1 sm:mt-2">0</p>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 sm:p-6">
+            <p class="text-xs uppercase text-slate-400" data-i18n="stats.meanIncidence">Mean incidence</p>
+            <p id="avgIncidence" class="text-3xl sm:text-5xl font-semibold text-white mt-1 sm:mt-2">0</p>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 sm:p-6 flex flex-col justify-between">
+            <div>
+              <p class="text-xs uppercase text-slate-400" data-i18n="stats.strongestCorr">Strongest corr (lag 0)</p>
+              <p id="strongestCorr" class="text-3xl sm:text-4xl font-semibold text-white">—</p>
+            </div>
+            <div id="corrPollutant" class="text-emerald-400 text-xs sm:text-sm font-medium mt-1"></div>
+          </div>
+
+          <div class="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 sm:p-6 flex items-center">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 text-red-400">
+                <span class="alert-dot inline-block w-2 h-2 sm:w-3 sm:h-3 bg-red-400 rounded-full"></span>
+                <span class="font-semibold text-sm sm:text-base" data-i18n="stats.peaksDetected">Peaks detected</span>
+              </div>
+              <p id="peakCount" class="text-3xl sm:text-5xl font-semibold text-red-400 mt-1">0</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4" data-i18n="sections.pollutantAverages">🌫️ Pollutant Averages & WHO Exceedances</h3>
+          <div id="pollutantsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 mt-8">
+          <div class="lg:col-span-8 bg-slate-900 border border-slate-700 rounded-2xl sm:rounded-3xl p-5 sm:p-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-baseline gap-3 mb-4 sm:mb-6">
+              <h3 class="text-xl sm:text-2xl font-semibold" data-i18n="sections.temporalTrend">📅 Temporal trend – Incidence</h3>
+              <select id="timeFilter" class="bg-slate-800 text-sm rounded-2xl px-3 py-2 border border-slate-600 outline-none w-full sm:w-auto">
+                <option value="all" data-i18n="filters.fullPeriod">Full period</option>
+                <option value="2020-2025" data-i18n="filters.range2020_2025">2020-2025</option>
+                <option value="2012-2019" data-i18n="filters.range2012_2019">2012-2019</option>
+              </select>
+            </div>
+            <div class="chart-container"><canvas id="incidenceTrendChart"></canvas></div>
+          </div>
+
+          <div class="lg:col-span-4 bg-slate-900 border border-slate-700 rounded-2xl sm:rounded-3xl p-5 sm:p-8">
+            <h3 class="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6" data-i18n="sections.detectedPollutants">🌫️ Detected pollutants</h3>
+            <div class="chart-container"><canvas id="pollutantsTrendChart"></canvas></div>
+          </div>
+
+          <div class="lg:col-span-12 bg-slate-900 border border-slate-700 rounded-2xl sm:rounded-3xl p-5 sm:p-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <h3 class="text-xl sm:text-2xl font-semibold" data-i18n="sections.pollutionIncidence">🌫️ Pollution ↔ Incidence (lagged impact)</h3>
+              <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                <select id="scatterPollutant" class="bg-slate-800 text-sm rounded-2xl px-4 py-2 outline-none w-full sm:w-32"></select>
+                <select id="lagSelector" class="bg-slate-800 text-sm rounded-2xl px-4 py-2 outline-none w-full sm:w-40">
+                  <option value="0" data-i18n="lag.0">Lag 0 days</option>
+                  <option value="1" data-i18n="lag.1">Lag 1 day</option>
+                  <option value="2" data-i18n="lag.2">Lag 2 days</option>
+                  <option value="3" data-i18n="lag.3">Lag 3 days</option>
+                  <option value="4" data-i18n="lag.4">Lag 4 days</option>
+                  <option value="5" data-i18n="lag.5">Lag 5 days</option>
+                  <option value="6" data-i18n="lag.6">Lag 6 days</option>
+                  <option value="7" data-i18n="lag.7">Lag 7 days</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <div class="chart-container"><canvas id="scatterChart"></canvas></div>
+                <div id="scatterInfo" class="mt-3 text-center text-xs sm:text-sm text-emerald-400 font-medium"></div>
+              </div>
+              <div>
+                <div class="chart-container"><canvas id="correlationBarChart"></canvas></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lg:col-span-7 bg-slate-900 border border-slate-700 rounded-2xl sm:rounded-3xl p-5 sm:p-8">
+            <h3 class="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6" data-i18n="sections.seasonalTrends">📅 Seasonal trends (monthly average)</h3>
+            <div class="chart-container"><canvas id="monthlyTrendChart"></canvas></div>
+          </div>
+
+          <div class="lg:col-span-5 bg-slate-900 border border-slate-700 rounded-2xl sm:rounded-3xl p-5 sm:p-8">
+            <h3 class="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6" data-i18n="sections.peakDetection">⚠️ Peak detection</h3>
+            <div class="overflow-x-auto rounded-xl border border-slate-700">
+              <table id="peaksTable" class="w-full text-xs sm:text-sm min-w-[500px]">
+                <thead class="sticky top-0 bg-slate-800">
+                  <tr class="text-slate-400 text-xs"></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="translations.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
